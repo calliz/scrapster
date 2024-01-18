@@ -1,6 +1,7 @@
 package org.tretton37;
 
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,12 +118,9 @@ public class Scrapster {
                          .onStatus(HttpStatus::isError, clientResponse -> Mono.error(new RuntimeException("Error fetching url: " + url)))
                          .bodyToMono(String.class)
                          .doOnSubscribe(subscription -> LOGGER.info("Starting fetch for url: {}", url))
-                         .doOnSuccess(content -> {
-                             // LOGGER.debug("Completed fetch for url: {}", url);
-                             // LOGGER.debug("Content for url {} : \n{}", url, content);
-                         })
                          .flatMap(content -> {
                              LOGGER.info("Fetched content from url: {}", url);
+                             // LOGGER.debug("Content for url {} : \n{}", url, content);
                              // Save html content and thenReturn to pass content from Mono<Void>
                              return saveContent(content, url, ResourceType.HTML).thenReturn(content);
                          });
@@ -138,9 +136,22 @@ public class Scrapster {
             case JS -> "js";
             case IMAGE -> "image";
         };
-        String path = folder + "/" + Math.abs(url.hashCode()) + "." + resourceType.toString()
-                                                                                  .toLowerCase();
 
+        String filename;
+        if (resourceType == ResourceType.HTML && url.equals(URL)) {
+            filename = "index.html";  // Main page saved as index.html
+        } else {
+            filename = Math.abs(url.hashCode()) + "." + resourceType.toString()
+                                                                    .toLowerCase();
+        }
+
+        String path = folder + "/" + filename;
+        content = convertRealLinksToOfflineLinks(content, url, resourceType);
+
+        return saveContentToDisk(content, url, folder, path);
+    }
+
+    private static Mono<Void> saveContentToDisk(String content, String url, String folder, String path) {
         // Create dirs in separate thread to avoid blocking
         return Mono.fromCallable(() -> {
                        // Create dir if not exist
@@ -158,6 +169,44 @@ public class Scrapster {
                    // return Mono<Void>
                    .then()
                    .doOnError(IOException.class, e -> LOGGER.error("Error: failed to save content for url {} to path {}.", url, path, e));
+    }
+
+    private static String convertRealLinksToOfflineLinks(String content, String url, ResourceType resourceType) {
+        if (resourceType == ResourceType.HTML) {
+            Document document = Jsoup.parse(content, url);
+
+            // HTML links
+            Elements linkElements = document.select("a[href]");
+            linkElements.forEach(link -> {
+                String absoluteUrl = link.attr("abs:href");
+                link.attr("href", "html/" + Math.abs(absoluteUrl.hashCode()) + ".html");
+            });
+
+            // CSS links
+            Elements cssLinkElements = document.select("link[href$=.css]");
+            cssLinkElements.forEach(cssLink -> {
+                String absoluteUrl = cssLink.attr("abs:href");
+                cssLink.attr("href", "css/" + Math.abs(absoluteUrl.hashCode()) + ".css");
+            });
+
+            // JS links
+            Elements scriptElements = document.select("script[src]");
+            scriptElements.forEach(script -> {
+                String absoluteUrl = script.attr("abs:src");
+                script.attr("src", "js/" + Math.abs(absoluteUrl.hashCode()) + ".js");
+            });
+
+            // Image links
+            Elements imgElements = document.select("img[src]");
+            imgElements.forEach(img -> {
+                String absoluteUrl = img.attr("abs:src");
+                img.attr("src", "image/" + Math.abs(absoluteUrl.hashCode()) + ".image");
+            });
+
+            // Overwrite with updated links
+            content = document.html();
+        }
+        return content;
     }
 
     public static void main(String[] args) {
