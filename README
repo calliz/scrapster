@@ -1,0 +1,34 @@
+Scrapster is a powerful web scraper built in Java. Using Spring's reactive WebClient and Jsoup library, it efficiently scrapes and processes various web content.
+
+Features
+Web Scraping: Scrapster scraps the provided website, extracting resources like HTML, CSS, JS, and images.
+Concurrency Limit: To prevent overwhelming the client or server with requests, concurrency is limited in certain operations using Spring WebFlux streams.
+Offline Browsing: The URLs in the scraped content are modified to facilitate offline browsing. Navigate the downloaded website on your local machine similar to online browsing.
+Efficient: Scrapster avoids re-visiting the same web pages, saving time and resources, thanks to its in-built tracking mechanism.
+User-Friendly: This command-line tool accepts the scraping target URL as a command-line argument. A default URL is used in the absence of a user-provided one.
+
+Usage
+You can run Scrapster in the command line, providing the URL you wish to scrape as an argument like so:
+java Scrapster https://example.com
+
+In cases where you do not provide a URL, it defaults to a predefined URL.
+
+Technology and Libraries Used
+Scrapster uses advanced technologies and libraries to carry out its tasks:
+Java 18 for its rich set of features.
+Spring's reactive WebClient for non-blocking HTTP requests.
+Jsoup for parsing HTML content, and data extraction and manipulation.
+SLF4J for logging during the application lifecycle.
+Ensure that you've installed the correct Java version and included necessary libraries in your classpath prior to compiling and running the program.
+
+n cases where you do not provide a URL, it defaults to a predefined URL.
+Technology and Libraries Used
+Scrapster uses advanced technologies and libraries to carry out its tasks:
+Java 18 for its rich set of features.
+Spring's reactive WebClient for non-blocking HTTP requests.
+Jsoup for parsing HTML content, and data extraction and manipulation.
+SLF4J for logging during the application lifecycle.
+Ensure that you've installed the correct Java version and included necessary libraries in your classpath prior to compiling and running the program.
+
+Author
+Scrapster is authored by Carl Bjerggaard <carl.bjerggaard@gmail.com>.
