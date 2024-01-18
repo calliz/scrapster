@@ -4,6 +4,8 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -22,52 +24,54 @@ public class Scrapster {
 
     private void scrapePage(String url, int maxDepth) {
         if (maxDepth < MAX_DEPTH && !visited.contains(url)) {
+            // Add if not already visited
+            visited.add(url);
+
+            // Get html page content using HttpClient to make the scraping blocking
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request;
             try {
-                // Add if not already visited
-                visited.add(url);
+                request = HttpRequest.newBuilder()
+                                     .uri(URI.create(url))
+                                     .build();
+            } catch (IllegalArgumentException e) {
+                return;
+            }
 
-                // Get html page content using HttpClient to make the scraping blocking
-                HttpClient client = HttpClient.newHttpClient();
-                HttpRequest request;
-                try {
-                    request = HttpRequest.newBuilder()
-                                         .uri(URI.create(url))
-                                         .build();
-                } catch (IllegalArgumentException e) {
-                    return;
-                }
+            HttpResponse<String> response;
+            try {
+                response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            } catch (IOException |
+                     InterruptedException e) {
+                return;
+            }
 
-                HttpResponse<String> response;
-                try {
-                    response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                } catch (IOException |
-                         InterruptedException e) {
-                    return;
-                }
+            String pageContent = response.body();
 
-                String pageContent = response.body();
+            // Save content and continue
+            savePageContent(url, pageContent);
 
-                // Save content and continue
-                savePageContent(url, pageContent);
+            // Get all page links
+            Elements pageLinks = Jsoup.parse(pageContent, url)
+                                      .select("a[href]");
 
-                // Get all page links
-                Elements pageLinks = Jsoup.parse(pageContent, url)
-                                          .select("a[href]");
-
-                // For each link, increase depth and fetch and save content recursively
-                for (Element link : pageLinks) {
-                    scrapePage(link.attr("abs:href"), maxDepth + 1);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
+            // For each link, increase depth and fetch and save content recursively
+            for (Element link : pageLinks) {
+                scrapePage(link.attr("abs:href"), maxDepth + 1);
             }
         }
     }
 
-    private void savePageContent(String url, String content) throws IOException {
+    private static void savePageContent(String content, String url) {
         System.out.println(url);
         // System.out.println(content);
         System.out.println(visited.size() + " urls visited");
+        String filename = Math.abs(url.hashCode()) + ".txt";
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename))) {
+            writer.write(content);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static void main(String[] args) {
