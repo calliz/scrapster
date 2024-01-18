@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -23,7 +24,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class Scrapster {
-    public static final String URL = "https://books.toscrape.com/";
     public static final int CONCURRENCY_LIMIT = 7;
     // Keep track of visited links
     private static Set<String> visited = new HashSet<>();
@@ -46,7 +46,7 @@ public class Scrapster {
         IMAGE
     }
 
-    Flux<Object> scrapePage(String url, int maxDepth) {
+    Flux<Object> scrapePage(String url, String mainUrl, int maxDepth) {
         // LOGGER.debug("Scraping page {} using max depth {}", url, maxDepth);
         if (maxDepth >= MAX_DEPTH) {
             skippedMaxDepth++;
@@ -61,11 +61,11 @@ public class Scrapster {
         // Add if not already visited
         visited.add(url);
 
-        return fetchHtmlContent(url).flatMapMany(content -> fetchResources(url, maxDepth, content))
-                                    .onErrorResume(e -> {
-                                        LOGGER.error("Failed to parse content from url: {}", url, e);
-                                        return Mono.empty();
-                                    });
+        return fetchHtmlContent(url, mainUrl).flatMapMany(content -> fetchResources(url, maxDepth, content))
+                                             .onErrorResume(e -> {
+                                                 LOGGER.error("Failed to parse content from url: {}", url, e);
+                                                 return Mono.empty();
+                                             });
     }
 
     private Flux<Object> fetchResources(String url, int maxDepth, String content) {
@@ -103,12 +103,12 @@ public class Scrapster {
                    // .doOnNext(link -> LOGGER.debug("Scraping link: {}", link))
                    // Limit parallel requests to not overflow client or server
                    .flatMap(links -> Flux.fromIterable(links)
-                                         .flatMap(link -> scrapePage(link, maxDepth + 1), 10));
+                                         .flatMap(link -> scrapePage(link, null, maxDepth + 1), 10));
     }
 
     private static Mono<Void> fetchAndSaveResources(String resourceUrl, ResourceType resourceType) {
         return fetchResourceContent(resourceUrl)
-                .flatMap(resource -> saveContent(resource, resourceUrl, resourceType));
+                .flatMap(resource -> saveContent(resource, resourceUrl, null, resourceType));
     }
 
     private static Mono<String> fetchResourceContent(String resourceUrl) {
@@ -118,7 +118,7 @@ public class Scrapster {
                          .bodyToMono(String.class);
     }
 
-    private static Mono<String> fetchHtmlContent(String url) {
+    private static Mono<String> fetchHtmlContent(String url, String mainUrl) {
         return WEB_CLIENT.get()
                          .uri(url)
                          .retrieve()
@@ -129,11 +129,11 @@ public class Scrapster {
                              LOGGER.info("Fetched content from url: {}", url);
                              // LOGGER.debug("Content for url {} : \n{}", url, content);
                              // Save html content and thenReturn to pass content from Mono<Void>
-                             return saveContent(content, url, ResourceType.HTML).thenReturn(content);
+                             return saveContent(content, url, mainUrl, ResourceType.HTML).thenReturn(content);
                          });
     }
 
-    private static Mono<Void> saveContent(String content, String url, ResourceType resourceType) {
+    private static Mono<Void> saveContent(String content, String url, String mainUrl, ResourceType resourceType) {
         // LOGGER.debug("Saving content for url: {}", url);
 
         // Create folder for type
@@ -145,8 +145,8 @@ public class Scrapster {
         };
 
         String filename;
-        if (resourceType == ResourceType.HTML && url.equals(URL)) {
-            filename = "index.html";  // Main page saved as index.html
+        if (resourceType == ResourceType.HTML && !StringUtils.isEmpty(mainUrl) && url.equals(mainUrl)) {
+            filename = "index.html";  // Main page saved as index.htmlß
         } else {
             filename = Math.abs(url.hashCode()) + "." + resourceType.toString()
                                                                     .toLowerCase();
@@ -217,8 +217,16 @@ public class Scrapster {
     }
 
     public static void main(String[] args) {
-        LOGGER.info("Starting web scraping of: {}", URL);
-        new Scrapster().scrapePage(URL, 0)
+        // URL from args
+        String url;
+        if (args.length > 0) {
+            url = args[0];
+        } else {
+            System.out.println("Please provide a URL as argument. Using default URL.");
+            url = "https://books.toscrape.com/";
+        }
+        LOGGER.info("Starting web scraping of: {}", url);
+        new Scrapster().scrapePage(url, url, 0)
                        .doOnComplete(() -> LOGGER.info("""
                                Scraping completed.
                                Skipped due to max depth: {} urls

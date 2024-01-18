@@ -34,8 +34,8 @@ public class ScrapsterTest {
 
     @Test
     public void testScrapingAndSaving() throws IOException {
-
-        new Scrapster().scrapePage(Scrapster.URL, 0).blockLast();
+        String url = "https://books.toscrape.com/";
+        new Scrapster().scrapePage(url, url, 0).blockLast();
 
         // Check if scraped contents are saved in dirs
         assertTrue(Files.list(Path.of("html")).count() > 0);
