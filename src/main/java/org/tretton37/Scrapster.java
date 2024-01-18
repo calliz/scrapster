@@ -46,7 +46,7 @@ public class Scrapster {
         IMAGE
     }
 
-    private Flux<Object> scrapePage(String url, int maxDepth) {
+    Flux<Object> scrapePage(String url, int maxDepth) {
         // LOGGER.debug("Scraping page {} using max depth {}", url, maxDepth);
         if (maxDepth >= MAX_DEPTH) {
             skippedMaxDepth++;
@@ -94,12 +94,7 @@ public class Scrapster {
                            return Mono.empty();
                        }
 
-                       // Download the resource
-                       return WEB_CLIENT.get()
-                                        .uri(resourceUrl)
-                                        .retrieve()
-                                        .bodyToMono(String.class)
-                                        .flatMap(resource -> saveContent(resource, resourceUrl, resourceType));
+                       return fetchAndSaveResources(resourceUrl, resourceType);
                    }, CONCURRENCY_LIMIT) // Limit parallel requests to not overflow client or server
                    .thenMany(Flux.fromIterable(Jsoup.parse(content, url)
                                                     .select("a[href]")))
@@ -109,6 +104,18 @@ public class Scrapster {
                    // Limit parallel requests to not overflow client or server
                    .flatMap(links -> Flux.fromIterable(links)
                                          .flatMap(link -> scrapePage(link, maxDepth + 1), 10));
+    }
+
+    private static Mono<Void> fetchAndSaveResources(String resourceUrl, ResourceType resourceType) {
+        return fetchResourceContent(resourceUrl)
+                .flatMap(resource -> saveContent(resource, resourceUrl, resourceType));
+    }
+
+    private static Mono<String> fetchResourceContent(String resourceUrl) {
+        return WEB_CLIENT.get()
+                         .uri(resourceUrl)
+                         .retrieve()
+                         .bodyToMono(String.class);
     }
 
     private static Mono<String> fetchHtmlContent(String url) {
