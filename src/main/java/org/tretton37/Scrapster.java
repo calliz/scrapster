@@ -20,24 +20,25 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Scrapster {
-    public static final int CONCURRENCY_LIMIT = 7;
+    public static final int CONCURRENCY_LIMIT = 5;
     // Keep track of visited links
-    private static Set<String> visited = new HashSet<>();
+    private static Set<String> visited = ConcurrentHashMap.newKeySet();
+    private static AtomicInteger skippedMaxDepth = new AtomicInteger(0);
+    private static AtomicInteger skippedVisited = new AtomicInteger(0);
 
     // Avoid stackoverflow and loops
-    private static final int MAX_DEPTH = 3;
+    private static final int MAX_DEPTH = 7;
 
     private static final WebClient WEB_CLIENT = WebClient.builder()
                                                          .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE)
                                                          .build();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Scrapster.class);
-    private static int skippedMaxDepth = 0;
-    private static int skippedVisited = 0;
 
     public enum ResourceType {
         HTML,
@@ -49,11 +50,11 @@ public class Scrapster {
     Flux<Object> scrapePage(String url, String mainUrl, int maxDepth) {
         // LOGGER.debug("Scraping page {} using max depth {}", url, maxDepth);
         if (maxDepth >= MAX_DEPTH) {
-            skippedMaxDepth++;
+            skippedMaxDepth.incrementAndGet();
             // LOGGER.debug("Skipped, max depth reached: {}", url);
             return Flux.empty();
         } else if (visited.contains(url)) {
-            skippedVisited++;
+            skippedVisited.incrementAndGet();
             // LOGGER.debug("Skipped, already visited: {}", url);
             return Flux.empty();
         }
@@ -146,7 +147,7 @@ public class Scrapster {
 
         String filename;
         if (resourceType == ResourceType.HTML && !StringUtils.isEmpty(mainUrl) && url.equals(mainUrl)) {
-            filename = "index.html";  // Main page saved as index.htmlß
+            filename = "index.html";  // Main page saved as index.html
         } else {
             filename = Math.abs(url.hashCode()) + "." + resourceType.toString()
                                                                     .toLowerCase();
@@ -231,7 +232,9 @@ public class Scrapster {
                                Scraping completed.
                                Skipped due to max depth: {} urls
                                Skipped due to already visited: {} urls
-                               Urls visited {}""", skippedMaxDepth, skippedVisited, visited.size()))
+                               Urls visited {}""", skippedMaxDepth.get(), skippedVisited.get(), visited.size()))
                        .blockLast();
     }
 }
+
+// 
